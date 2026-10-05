@@ -39,10 +39,9 @@ class BrowserActivity : AppCompatActivity() {
             settings.loadWithOverviewMode = true
         }
 
-        // === Set Client Hints metadata (kunci utama spoof userAgentData) ===
+        // === Set Client Hints metadata ===
         if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
             try {
-                // BrandVersion menggunakan Builder pattern dari class mandiri UserAgentMetadata.BrandVersion
                 val brandVersionList = listOf(
                     UserAgentMetadata.BrandVersion.Builder()
                         .setBrand("Chromium")
@@ -68,7 +67,7 @@ class BrowserActivity : AppCompatActivity() {
                     .setPlatform("Android")
                     .setPlatformVersion("13.0.0")
                     .setArchitecture("arm")
-                    .setBitness(UserAgentMetadata.BITNESS_64)
+                    .setBitness(64) // ✅ Gunakan integer 64, bukan BITNESS_64
                     .setFullVersion("${fp.chromeVer}.0.0.0")
                     .build()
 
@@ -83,13 +82,13 @@ class BrowserActivity : AppCompatActivity() {
 
         val script = fp.toInjectionScript()
 
-        // === Layer 1: document-start (AndroidX WebKit) ===
+        // Layer 1: document-start
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addDocumentStartJavaScript(web, script, setOf("*"))
             Log.d("MultiProfile", "Document-start script terpasang")
         }
 
-        // === Layer 2: onPageStarted + onPageFinished (fallback) ===
+        // Layer 2: onPageStarted + onPageFinished (fallback)
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 view?.evaluateJavascript(script, null)
