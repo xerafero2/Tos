@@ -33,8 +33,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    // Kotlin 2.x: gunakan compilerOptions alih-alih kotlinOptions
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     packaging {
@@ -46,7 +49,6 @@ android {
 
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
-    // Pin ke 1.15.0 agar tidak menarik 1.16.0 yang butuh SDK 35 wajib
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("org.mozilla.geckoview:geckoview:139.0.20250603165925")
 }
