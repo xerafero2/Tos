@@ -25,6 +25,7 @@ class BrowserActivity : AppCompatActivity() {
         val id = intent.getStringExtra("id") ?: return finish()
         val fp = ProfileStore(this).get(id) ?: return finish()
 
+        // Isolasi sesi: buang cookie & storage lama
         CookieManager.getInstance().removeAllCookies(null)
         WebStorage.getInstance().deleteAllData()
 
@@ -40,29 +41,36 @@ class BrowserActivity : AppCompatActivity() {
         // === Set Client Hints metadata (kunci utama spoof userAgentData) ===
         if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
             try {
-                val brands = listOf(
-                    WebSettingsCompat.UserAgentBrandVersion("Chromium", fp.chromeVer.toString()),
-                    WebSettingsCompat.UserAgentBrandVersion("Google Chrome", fp.chromeVer.toString()),
-                    WebSettingsCompat.UserAgentBrandVersion("Not-A.Brand", "99")
+                // BrandVersion menggunakan Builder pattern
+                val brandVersionList = listOf(
+                    WebSettingsCompat.UserAgentMetadata.BrandVersion.Builder()
+                        .setBrand("Chromium")
+                        .setMajorVersion(fp.chromeVer.toString())
+                        .setFullVersion("${fp.chromeVer}.0.0.0")
+                        .build(),
+                    WebSettingsCompat.UserAgentMetadata.BrandVersion.Builder()
+                        .setBrand("Google Chrome")
+                        .setMajorVersion(fp.chromeVer.toString())
+                        .setFullVersion("${fp.chromeVer}.0.0.0")
+                        .build(),
+                    WebSettingsCompat.UserAgentMetadata.BrandVersion.Builder()
+                        .setBrand("Not-A.Brand")
+                        .setMajorVersion("99")
+                        .setFullVersion("99.0.0.0")
+                        .build()
                 )
-                val fullVersionList = listOf(
-                    WebSettingsCompat.UserAgentBrandVersion("Chromium", "${fp.chromeVer}.0.0.0"),
-                    WebSettingsCompat.UserAgentBrandVersion("Google Chrome", "${fp.chromeVer}.0.0.0"),
-                    WebSettingsCompat.UserAgentBrandVersion("Not-A.Brand", "99.0.0.0")
-                )
-                val meta = WebSettingsCompat.UserAgentMetadata(
-                    2, // CH_UA
-                    brands,
-                    fullVersionList,
-                    true,          // mobile
-                    fp.model,      // model
-                    "Android",     // platform
-                    "13.0.0",      // platformVersion
-                    "arm",         // architecture
-                    "64",          // bitness
-                    "${fp.chromeVer}.0.0.0",
-                    false          // wow64
-                )
+
+                val meta = WebSettingsCompat.UserAgentMetadata.Builder()
+                    .setBrandVersionList(brandVersionList)
+                    .setMobile(true)
+                    .setModel(fp.model)
+                    .setPlatform("Android")
+                    .setPlatformVersion("13.0.0")
+                    .setArchitecture("arm")
+                    .setBitness(WebSettingsCompat.UserAgentMetadata.BITNESS_64)
+                    .setFullVersion("${fp.chromeVer}.0.0.0")
+                    .build()
+
                 WebSettingsCompat.setUserAgentMetadata(web.settings, meta)
                 Log.d("MultiProfile", "UserAgentMetadata berhasil di-set")
             } catch (e: Exception) {
