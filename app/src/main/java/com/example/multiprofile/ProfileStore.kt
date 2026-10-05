@@ -14,13 +14,10 @@ class ProfileStore(ctx: Context) {
                 o.getString("id"), o.getString("name"),
                 o.getString("userAgent"), o.getString("platform"),
                 o.getInt("width"), o.getInt("height"),
-                o.getDouble("pixelRatio"),
-                o.getInt("hardwareConcurrency"), o.getInt("deviceMemory"),
-                o.getString("timezone"), o.getInt("tzOffsetMinutes"),
-                o.getString("language"),
+                o.getString("timezone"), o.getString("language"),
                 o.getString("webglVendor"), o.getString("webglRenderer"),
-                o.getInt("canvasNoise"), o.getInt("chromeVer"),
-                o.optString("model", "Pixel 7")
+                o.optString("model", "Pixel 7"),
+                o.optInt("chromeVer", 121)
             )
         }
     }
