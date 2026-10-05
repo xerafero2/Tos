@@ -16,9 +16,11 @@ class ProfileStore(ctx: Context) {
                 o.getInt("width"), o.getInt("height"),
                 o.getDouble("pixelRatio"),
                 o.getInt("hardwareConcurrency"), o.getInt("deviceMemory"),
-                o.getString("timezone"), o.getString("language"),
+                o.getString("timezone"), o.getInt("tzOffsetMinutes"),
+                o.getString("language"),
                 o.getString("webglVendor"), o.getString("webglRenderer"),
-                o.getInt("canvasNoise"), o.getInt("chromeVer") // Tambahan
+                o.getInt("canvasNoise"), o.getInt("chromeVer"),
+                o.optString("model", "Pixel 7")
             )
         }
     }
