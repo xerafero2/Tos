@@ -39,13 +39,15 @@ class MainActivity : AppCompatActivity() {
                 setPadding(0, 20, 0, 20)
             }
             row.addView(TextView(this).apply {
-                text = "${fp.name}\nUA: ${fp.userAgent.take(48)}...\n${fp.width}x${fp.height} • ${fp.timezone}"
+                text = "${fp.name}\n${fp.model} • ${fp.width}x${fp.height}\n${fp.timezone} • ${fp.language}"
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
             row.addView(Button(this).apply {
                 text = "Buka"
                 setOnClickListener {
-                    startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra("id", fp.id))
+                    startActivity(
+                        Intent(this@MainActivity, BrowserActivity::class.java).putExtra("id", fp.id)
+                    )
                 }
             })
             row.addView(Button(this).apply {
