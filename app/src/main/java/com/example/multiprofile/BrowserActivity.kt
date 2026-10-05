@@ -1,133 +1,47 @@
 package com.example.multiprofile
 
-import android.annotation.SuppressLint
-import android.graphics.Bitmap
 import android.os.Bundle
-import android.util.Log
-import android.webkit.CookieManager
-import android.webkit.WebStorage
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
-import androidx.webkit.UserAgentMetadata
-import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
+import org.mozilla.geckoview.GeckoView
 
 class BrowserActivity : AppCompatActivity() {
-    private lateinit var web: WebView
+    private lateinit var session: GeckoSession
+    private lateinit var runtime: GeckoRuntime
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val id = intent.getStringExtra("id") ?: return finish()
         val fp = ProfileStore(this).get(id) ?: return finish()
 
-        // Isolasi sesi: buang cookie & storage lama
-        CookieManager.getInstance().removeAllCookies(null)
-        WebStorage.getInstance().deleteAllData()
+        // Runtime singleton per aplikasi
+        runtime = GeckoRuntime.getDefault(this)
 
-        web = WebView(this).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.databaseEnabled = true
-            settings.userAgentString = fp.userAgent
-            settings.useWideViewPort = true
-            settings.loadWithOverviewMode = true
-        }
+        // Session terisolasi per profil:
+        // - usePrivateMode(true) → storage & cookie tidak persist, terpisah dari sesi lain
+        // - userAgentOverride → set UA di level engine, bukan injeksi JS
+        val settings = GeckoSessionSettings.Builder()
+            .userAgentOverride(fp.userAgent)
+            .usePrivateMode(true)
+            .useTrackingProtection(true)
+            .build()
 
-        // === Set Client Hints metadata ===
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
-            try {
-                val brandVersionList = listOf(
-                    UserAgentMetadata.BrandVersion.Builder()
-                        .setBrand("Chromium")
-                        .setMajorVersion(fp.chromeVer.toString())
-                        .setFullVersion("${fp.chromeVer}.0.0.0")
-                        .build(),
-                    UserAgentMetadata.BrandVersion.Builder()
-                        .setBrand("Google Chrome")
-                        .setMajorVersion(fp.chromeVer.toString())
-                        .setFullVersion("${fp.chromeVer}.0.0.0")
-                        .build(),
-                    UserAgentMetadata.BrandVersion.Builder()
-                        .setBrand("Not-A.Brand")
-                        .setMajorVersion("99")
-                        .setFullVersion("99.0.0.0")
-                        .build()
-                )
+        session = GeckoSession(settings)
+        session.open(runtime)
 
-                val meta = UserAgentMetadata.Builder()
-                    .setBrandVersionList(brandVersionList)
-                    .setMobile(true)
-                    .setModel(fp.model)
-                    .setPlatform("Android")
-                    .setPlatformVersion("13.0.0")
-                    .setArchitecture("arm")
-                    .setBitness(64) // ✅ Gunakan integer 64, bukan BITNESS_64
-                    .setFullVersion("${fp.chromeVer}.0.0.0")
-                    .build()
+        val view = GeckoView(this)
+        view.setSession(session)
+        setContentView(view)
 
-                WebSettingsCompat.setUserAgentMetadata(web.settings, meta)
-                Log.d("MultiProfile", "UserAgentMetadata berhasil di-set")
-            } catch (e: Exception) {
-                Log.e("MultiProfile", "Gagal set UserAgentMetadata", e)
-            }
-        } else {
-            Log.w("MultiProfile", "USER_AGENT_METADATA tidak didukung")
-        }
-
-        val script = fp.toInjectionScript()
-
-        // Layer 1: document-start
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(web, script, setOf("*"))
-            Log.d("MultiProfile", "Document-start script terpasang")
-        }
-
-        // Layer 2: onPageStarted + onPageFinished (fallback)
-        web.webViewClient = object : WebViewClient() {
-            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                view?.evaluateJavascript(script, null)
-            }
-            override fun onPageFinished(view: WebView?, url: String?) {
-                view?.evaluateJavascript(script, null)
-            }
-        }
-
-        val urlBar = EditText(this).apply {
-            setText("https://abrahamjuliot.github.io/creepjs/")
-        }
-        val goBtn = Button(this).apply {
-            text = "Go"
-            setOnClickListener {
-                var u = urlBar.text.toString().trim()
-                if (!u.startsWith("http")) u = "https://$u"
-                web.loadUrl(u)
-            }
-        }
-        val topBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(urlBar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            addView(goBtn)
-        }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(topBar)
-            addView(web, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0
-            ).apply { weight = 1f })
-        }
-        setContentView(root)
-
-        web.loadUrl(urlBar.text.toString())
+        session.loadUri("https://abrahamjuliot.github.io/creepjs/")
     }
 
     override fun onDestroy() {
-        web.destroy()
+        try {
+            session.close()
+        } catch (_: Throwable) {}
         super.onDestroy()
     }
 }
