@@ -9,6 +9,7 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import android.widget.Button
@@ -24,7 +25,6 @@ class BrowserActivity : AppCompatActivity() {
         val id = intent.getStringExtra("id") ?: return finish()
         val fp = ProfileStore(this).get(id) ?: return finish()
 
-        // Isolasi sesi: buang cookie & storage lama
         CookieManager.getInstance().removeAllCookies(null)
         WebStorage.getInstance().deleteAllData()
 
@@ -37,18 +37,56 @@ class BrowserActivity : AppCompatActivity() {
             settings.loadWithOverviewMode = true
         }
 
-        val script = fp.toInjectionScript()
-        val isSupported = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-        Log.d("MultiProfile", "DOCUMENT_START_SCRIPT supported: $isSupported")
-
-        if (isSupported) {
-            WebViewCompat.addDocumentStartJavaScript(web, script, setOf("*"))
+        // === Set Client Hints metadata (kunci utama spoof userAgentData) ===
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
+            try {
+                val brands = listOf(
+                    WebSettingsCompat.UserAgentBrandVersion("Chromium", fp.chromeVer.toString()),
+                    WebSettingsCompat.UserAgentBrandVersion("Google Chrome", fp.chromeVer.toString()),
+                    WebSettingsCompat.UserAgentBrandVersion("Not-A.Brand", "99")
+                )
+                val fullVersionList = listOf(
+                    WebSettingsCompat.UserAgentBrandVersion("Chromium", "${fp.chromeVer}.0.0.0"),
+                    WebSettingsCompat.UserAgentBrandVersion("Google Chrome", "${fp.chromeVer}.0.0.0"),
+                    WebSettingsCompat.UserAgentBrandVersion("Not-A.Brand", "99.0.0.0")
+                )
+                val meta = WebSettingsCompat.UserAgentMetadata(
+                    2, // CH_UA
+                    brands,
+                    fullVersionList,
+                    true,          // mobile
+                    fp.model,      // model
+                    "Android",     // platform
+                    "13.0.0",      // platformVersion
+                    "arm",         // architecture
+                    "64",          // bitness
+                    "${fp.chromeVer}.0.0.0",
+                    false          // wow64
+                )
+                WebSettingsCompat.setUserAgentMetadata(web.settings, meta)
+                Log.d("MultiProfile", "UserAgentMetadata berhasil di-set")
+            } catch (e: Exception) {
+                Log.e("MultiProfile", "Gagal set UserAgentMetadata", e)
+            }
         } else {
-            // Fallback: injeksi di onPageStarted (meskipun agak terlambat untuk beberapa properti)
-            web.webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                    view?.evaluateJavascript(script, null)
-                }
+            Log.w("MultiProfile", "USER_AGENT_METADATA tidak didukung")
+        }
+
+        val script = fp.toInjectionScript()
+
+        // === Layer 1: document-start (AndroidX WebKit) ===
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(web, script, setOf("*"))
+            Log.d("MultiProfile", "Document-start script terpasang")
+        }
+
+        // === Layer 2: onPageStarted (fallback) ===
+        web.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                view?.evaluateJavascript(script, null)
+            }
+            override fun onPageFinished(view: WebView?, url: String?) {
+                view?.evaluateJavascript(script, null)
             }
         }
 
