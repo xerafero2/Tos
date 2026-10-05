@@ -18,7 +18,8 @@ data class Fingerprint(
     val language: String,
     val webglVendor: String,
     val webglRenderer: String,
-    val canvasNoise: Int
+    val canvasNoise: Int,
+    val chromeVer: Int // Tambahan untuk userAgentData
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name)
@@ -29,43 +30,81 @@ data class Fingerprint(
         put("deviceMemory", deviceMemory)
         put("timezone", timezone); put("language", language)
         put("webglVendor", webglVendor); put("webglRenderer", webglRenderer)
-        put("canvasNoise", canvasNoise)
+        put("canvasNoise", canvasNoise); put("chromeVer", chromeVer)
     }
 
     fun toInjectionScript(): String {
         val q = { s: String -> JSONObject.quote(s) }
         val languages = JSONArray(listOf(language, "en")).toString()
+        
+        // Hitung offset timezone berdasarkan target
+        val tzOffset = when (timezone) {
+            "Asia/Jakarta" -> -420
+            "Asia/Singapore" -> -480
+            "America/New_York" -> 300
+            "Europe/London" -> 0
+            "Asia/Tokyo" -> -540
+            else -> 0
+        }
+
         return """
             (function(){
               'use strict';
-              const def = (o,p,v)=>{try{Object.defineProperty(o,p,{get:()=>v,configurable:true})}catch(e){}};
-              def(navigator,'userAgent',${q(userAgent)});
-              def(navigator,'appVersion',${q(userAgent.replace("Mozilla/", ""))});
-              def(navigator,'platform',${q(platform)});
-              def(navigator,'hardwareConcurrency',$hardwareConcurrency);
-              def(navigator,'deviceMemory',$deviceMemory);
-              def(navigator,'language',${q(language)});
-              def(navigator,'languages',$languages);
-              def(navigator,'webdriver',false);
-              def(screen,'width',$width);
-              def(screen,'height',$height);
-              def(screen,'availWidth',$width);
-              def(screen,'availHeight',$height);
-              def(window,'devicePixelRatio',$pixelRatio);
-
-              const noise = $canvasNoise;
-              const _gid = CanvasRenderingContext2D.prototype.getImageData;
-              CanvasRenderingContext2D.prototype.getImageData = function(){
-                const d = _gid.apply(this, arguments);
-                const p = d.data;
-                for (let i=0;i<p.length;i+=4){
-                  p[i]   = (p[i]   + (noise & 0x03)) & 0xFF;
-                  p[i+1] = (p[i+1] + ((noise>>2) & 0x03)) & 0xFF;
-                  p[i+2] = (p[i+2] + ((noise>>4) & 0x03)) & 0xFF;
-                }
-                return d;
+              const override = (obj, prop, value) => {
+                try {
+                  Object.defineProperty(obj, prop, {
+                    get: () => value,
+                    set: () => {},
+                    configurable: true
+                  });
+                } catch(e) {}
+              };
+              const overrideGet = (proto, prop, getter) => {
+                try {
+                  Object.defineProperty(proto, prop, { get: getter, configurable: true });
+                } catch(e) {}
               };
 
+              // === NAVIGATOR ===
+              overrideGet(Navigator.prototype, 'userAgent', () => ${q(userAgent)});
+              overrideGet(Navigator.prototype, 'platform', () => ${q(platform)});
+              overrideGet(Navigator.prototype, 'hardwareConcurrency', () => $hardwareConcurrency);
+              overrideGet(Navigator.prototype, 'deviceMemory', () => $deviceMemory);
+              overrideGet(Navigator.prototype, 'language', () => ${q(language)});
+              overrideGet(Navigator.prototype, 'languages', () => $languages);
+              overrideGet(Navigator.prototype, 'webdriver', () => false);
+              
+              // Spoof userAgentData (Client Hints)
+              const uaData = {
+                 brands: [
+                    {brand: "Chromium", version: "${chromeVer}"},
+                    {brand: "Google Chrome", version: "${chromeVer}"},
+                    {brand: "Not-A.Brand", version: "99"}
+                 ],
+                 mobile: true,
+                 platform: "Android"
+              };
+              overrideGet(Navigator.prototype, 'userAgentData', () => uaData);
+
+              // === SCREEN ===
+              overrideGet(Screen.prototype, 'width', () => $width);
+              overrideGet(Screen.prototype, 'height', () => $height);
+              overrideGet(Screen.prototype, 'availWidth', () => $width);
+              overrideGet(Screen.prototype, 'availHeight', () => $height);
+              overrideGet(window, 'devicePixelRatio', () => $pixelRatio);
+              overrideGet(window, 'innerWidth', () => $width);
+              overrideGet(window, 'innerHeight', () => $height);
+
+              // === TIMEZONE ===
+              overrideGet(Date.prototype, 'getTimezoneOffset', () => $tzOffset);
+              const _resolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
+              Intl.DateTimeFormat.prototype.resolvedOptions = function() {
+                 const opts = _resolvedOptions.call(this);
+                 opts.timeZone = ${q(timezone)};
+                 return opts;
+              };
+
+              // === WEBGL ===
               const patchGL = (proto) => {
                 if (!proto) return;
                 const _gp = proto.getParameter;
@@ -77,6 +116,20 @@ data class Fingerprint(
               };
               patchGL(window.WebGLRenderingContext && WebGLRenderingContext.prototype);
               patchGL(window.WebGL2RenderingContext && WebGL2RenderingContext.prototype);
+
+              // === CANVAS NOISE ===
+              const _gid = CanvasRenderingContext2D.prototype.getImageData;
+              CanvasRenderingContext2D.prototype.getImageData = function(){
+                const d = _gid.apply(this, arguments);
+                const p = d.data;
+                const n = $canvasNoise;
+                for (let i=0; i<p.length; i+=4){
+                  p[i]   = (p[i]   + (n & 0x03)) & 0xFF;
+                  p[i+1] = (p[i+1] + ((n>>2) & 0x03)) & 0xFF;
+                  p[i+2] = (p[i+2] + ((n>>4) & 0x03)) & 0xFF;
+                }
+                return d;
+              };
             })();
         """.trimIndent()
     }
@@ -123,7 +176,8 @@ object FingerprintGenerator {
             language = langs[r.nextInt(langs.size)],
             webglVendor = wglV,
             webglRenderer = wglR,
-            canvasNoise = r.nextInt(256)
+            canvasNoise = r.nextInt(256),
+            chromeVer = chromeVer
         )
     }
 }
