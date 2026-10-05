@@ -1,10 +1,13 @@
 package com.example.multiprofile
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.os.Bundle
+import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -34,14 +37,17 @@ class BrowserActivity : AppCompatActivity() {
             settings.loadWithOverviewMode = true
         }
 
-        // Injeksi fingerprint sebelum script situs dijalankan
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(web, fp.toInjectionScript(), setOf("*"))
+        val script = fp.toInjectionScript()
+        val isSupported = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+        Log.d("MultiProfile", "DOCUMENT_START_SCRIPT supported: $isSupported")
+
+        if (isSupported) {
+            WebViewCompat.addDocumentStartJavaScript(web, script, setOf("*"))
         } else {
-            // Fallback: re-inject di setiap page start
-            web.webViewClient = object : android.webkit.WebViewClient() {
-                override fun onPageStarted(v: WebView?, url: String?, f: android.graphics.Bitmap?) {
-                    v?.evaluateJavascript(fp.toInjectionScript(), null)
+            // Fallback: injeksi di onPageStarted (meskipun agak terlambat untuk beberapa properti)
+            web.webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    view?.evaluateJavascript(script, null)
                 }
             }
         }
