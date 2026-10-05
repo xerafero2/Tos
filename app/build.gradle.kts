@@ -19,7 +19,13 @@ android {
     }
 
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
     }
 
     compileOptions {
@@ -27,7 +33,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 
     packaging {
         jniLibs {
@@ -39,5 +47,6 @@ android {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("org.mozilla.geckoview:geckoview:121.0.20231211151522")
+    // Menggunakan versi GeckoView yang valid dari repositori Mozilla
+    implementation("org.mozilla.geckoview:geckoview:139.0.20250603165925")
 }
