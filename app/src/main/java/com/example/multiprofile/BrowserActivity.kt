@@ -9,6 +9,7 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -41,33 +42,33 @@ class BrowserActivity : AppCompatActivity() {
         // === Set Client Hints metadata (kunci utama spoof userAgentData) ===
         if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA)) {
             try {
-                // BrandVersion menggunakan Builder pattern
+                // BrandVersion menggunakan Builder pattern dari class mandiri UserAgentMetadata.BrandVersion
                 val brandVersionList = listOf(
-                    WebSettingsCompat.UserAgentMetadata.BrandVersion.Builder()
+                    UserAgentMetadata.BrandVersion.Builder()
                         .setBrand("Chromium")
                         .setMajorVersion(fp.chromeVer.toString())
                         .setFullVersion("${fp.chromeVer}.0.0.0")
                         .build(),
-                    WebSettingsCompat.UserAgentMetadata.BrandVersion.Builder()
+                    UserAgentMetadata.BrandVersion.Builder()
                         .setBrand("Google Chrome")
                         .setMajorVersion(fp.chromeVer.toString())
                         .setFullVersion("${fp.chromeVer}.0.0.0")
                         .build(),
-                    WebSettingsCompat.UserAgentMetadata.BrandVersion.Builder()
+                    UserAgentMetadata.BrandVersion.Builder()
                         .setBrand("Not-A.Brand")
                         .setMajorVersion("99")
                         .setFullVersion("99.0.0.0")
                         .build()
                 )
 
-                val meta = WebSettingsCompat.UserAgentMetadata.Builder()
+                val meta = UserAgentMetadata.Builder()
                     .setBrandVersionList(brandVersionList)
                     .setMobile(true)
                     .setModel(fp.model)
                     .setPlatform("Android")
                     .setPlatformVersion("13.0.0")
                     .setArchitecture("arm")
-                    .setBitness(WebSettingsCompat.UserAgentMetadata.BITNESS_64)
+                    .setBitness(UserAgentMetadata.BITNESS_64)
                     .setFullVersion("${fp.chromeVer}.0.0.0")
                     .build()
 
@@ -88,7 +89,7 @@ class BrowserActivity : AppCompatActivity() {
             Log.d("MultiProfile", "Document-start script terpasang")
         }
 
-        // === Layer 2: onPageStarted (fallback) ===
+        // === Layer 2: onPageStarted + onPageFinished (fallback) ===
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 view?.evaluateJavascript(script, null)
