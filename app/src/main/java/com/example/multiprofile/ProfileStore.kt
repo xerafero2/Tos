@@ -18,7 +18,7 @@ class ProfileStore(ctx: Context) {
                 o.getInt("hardwareConcurrency"), o.getInt("deviceMemory"),
                 o.getString("timezone"), o.getString("language"),
                 o.getString("webglVendor"), o.getString("webglRenderer"),
-                o.getInt("canvasNoise")
+                o.getInt("canvasNoise"), o.getInt("chromeVer") // Tambahan
             )
         }
     }
